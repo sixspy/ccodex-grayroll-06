@@ -1,0 +1,7 @@
+#!/bin/sh
+# grayroll-06 并发双请求打争用写口（无扩展名入口，等价于同名 .py）。
+DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+if [ -x "$DIR/../.venv/bin/python" ]; then
+  exec "$DIR/../.venv/bin/python" "$DIR/kill_cascade_override_06.py" "$@"
+fi
+exec python3 "$DIR/kill_cascade_override_06.py" "$@"

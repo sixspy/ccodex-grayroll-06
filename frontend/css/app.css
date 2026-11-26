@@ -93,4 +93,18 @@ table code { font-size: 0.8rem; color: var(--accent); }
 .stat.warn { color: var(--warn); }
 .stat.danger { color: var(--danger); }
 .footer-note { margin-top: 1rem; font-size: 0.78rem; color: var(--muted); }
+
+/* grayroll-06：覆盖/求值/历史同源状态徽标 */
+.badge {
+  display: inline-block; padding: 0.08rem 0.5rem; border-radius: 999px;
+  font-size: 0.74rem; font-weight: 600; border: 1px solid var(--line);
+}
+.badge.on { background: rgba(61,214,198,0.16); color: var(--accent); border-color: rgba(61,214,198,0.4); }
+.badge.off { background: rgba(139,148,158,0.16); color: var(--muted); }
+.badge.cascade { background: rgba(240,180,41,0.16); color: var(--warn); border-color: rgba(240,180,41,0.42); }
+.badge.kill { background: rgba(240,113,120,0.16); color: var(--danger); border-color: rgba(240,113,120,0.42); }
+.row-cascaded td { opacity: 0.72; }
+.row-cascaded td:first-child { text-decoration: line-through; text-decoration-color: rgba(240,180,41,0.6); }
+.eval-verdict { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin: 0.5rem 0; }
+.trace-chip { font-family: var(--mono); font-size: 0.72rem; color: var(--accent); }
 .matrix-empty { color: var(--muted); }

@@ -44,8 +44,9 @@ export const RulesView = {
       <h2>正式规则</h2>
       <table><thead><tr><th>开关</th><th>环境</th><th>类型</th><th>%</th><th>版本</th></tr></thead>
       <tbody>
-        <tr v-for="r in official" :key="r.id">
-          <td>{{ r.flag_key }}</td><td>{{ r.env_code }}</td><td>{{ r.kind }}</td><td>{{ r.percent }}</td><td>v{{ r.version }}</td>
+        <tr v-for="r in official" :key="r.id" :class="{ 'row-cascaded': Number(r.percent) === 0 }">
+          <td>{{ r.flag_key }}</td><td>{{ r.env_code }}</td><td>{{ r.kind }}</td>
+          <td>{{ r.percent }}% <span v-if="Number(r.percent) === 0" class="badge kill">熔断关闭</span></td><td>v{{ r.version }}</td>
         </tr>
       </tbody></table>
       <h2 style="margin-top:1rem">影子草案</h2>

@@ -18,10 +18,19 @@ def write_audit(conn, actor: str, action: str, entity: str, entity_id: int | Non
     )
 
 
-def write_history(conn, actor: str, action: str, detail: str, flag_id: int | None = None, env_id: int | None = None) -> None:
+def write_history(
+    conn,
+    actor: str,
+    action: str,
+    detail: str,
+    flag_id: int | None = None,
+    env_id: int | None = None,
+    trace_id: str = "",
+) -> None:
     conn.execute(
-        "INSERT INTO change_history(flag_id, env_id, action, detail, actor, created_at) VALUES(?,?,?,?,?,?)",
-        (flag_id, env_id, action, detail, actor, time.time()),
+        "INSERT INTO change_history(flag_id, env_id, action, detail, actor, created_at, trace_id) "
+        "VALUES(?,?,?,?,?,?,?)",
+        (flag_id, env_id, action, detail, actor, time.time(), trace_id),
     )
 
 

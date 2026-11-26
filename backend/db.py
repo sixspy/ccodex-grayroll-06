@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 from pathlib import Path
 
@@ -9,7 +10,9 @@ from models import DOMAIN, PRODUCT_NAME, SKELETON, SUB_DIRECTION, USERS
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data"
-DB_PATH = DATA / "app.db"
+# grayroll-06：默认仍沿用单文件库 data/app.db；仅测试/演练可用 GRAYROLL_DB 指向临时单文件。
+_env_db = os.environ.get("GRAYROLL_DB", "").strip()
+DB_PATH = Path(_env_db) if _env_db else DATA / "app.db"
 FIXTURES = ROOT / "fixtures"
 FRONTEND = ROOT / "frontend"
 
@@ -23,9 +26,10 @@ PRODUCT_META = {
 
 def connect() -> sqlite3.Connection:
     DATA.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=8.0)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys=ON")
+    conn.execute("PRAGMA busy_timeout=8000")
     return conn
 
 
@@ -130,6 +134,7 @@ CREATE TABLE IF NOT EXISTS overrides(
   effect TEXT NOT NULL,
   note TEXT NOT NULL DEFAULT '',
   active INTEGER NOT NULL DEFAULT 1,
+  stop_reason TEXT NOT NULL DEFAULT '',
   updated_at REAL NOT NULL,
   UNIQUE(flag_id, env_id, subject_key)
 );
@@ -140,7 +145,8 @@ CREATE TABLE IF NOT EXISTS change_history(
   action TEXT NOT NULL,
   detail TEXT NOT NULL,
   actor TEXT NOT NULL,
-  created_at REAL NOT NULL
+  created_at REAL NOT NULL,
+  trace_id TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS audit_log(
   id INTEGER PRIMARY KEY,
@@ -279,8 +285,22 @@ def seed(conn: sqlite3.Connection) -> None:
     conn.execute("INSERT INTO experiment_bridge_stub(id, note) VALUES(1, ?)", ("实验平台桥接空桩未接通",))
 
 
+def _migrate(conn: sqlite3.Connection) -> None:
+    """对已存在的单文件库做幂等加列（CREATE TABLE IF NOT EXISTS 不会补列）。"""
+    wanted = {
+        "overrides": {"stop_reason": "TEXT NOT NULL DEFAULT ''"},
+        "change_history": {"trace_id": "TEXT NOT NULL DEFAULT ''"},
+    }
+    for table, cols in wanted.items():
+        existing = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+        for name, ddl in cols.items():
+            if name not in existing:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
+
+
 def init_db() -> None:
     with connect() as conn:
         conn.executescript(SCHEMA)
+        _migrate(conn)
         seed(conn)
         conn.commit()

@@ -31,35 +31,56 @@ def evaluate(body: EvalIn, authorization: str | None = Header(default=None)):
         env = conn.execute("SELECT * FROM environments WHERE code=?", (env_code,)).fetchone()
         if not env:
             raise HTTPException(404, detail="环境不存在")
+        ov_row = conn.execute(
+            "SELECT * FROM overrides WHERE flag_id=? AND env_id=? AND subject_key=?",
+            (fl["id"], env["id"], subject),
+        ).fetchone()
+
+        # grayroll-06：把该主体覆盖行的同源状态带给求值页。
+        # 熔断级联后 active=0 / stop_reason=kill_cascade，求值不得再被它撬开。
+        if ov_row is not None:
+            keys = ov_row.keys()
+            override_meta = {
+                "id": ov_row["id"],
+                "effect": ov_row["effect"],
+                "active": bool(ov_row["active"]),
+                "stop_reason": ov_row["stop_reason"] if "stop_reason" in keys else "",
+            }
+            override_active = bool(ov_row["active"])
+        else:
+            override_meta = None
+            override_active = False
+
+        common = {
+            "flag_key": flag_key,
+            "env_code": env_code,
+            "subject_key": subject,
+            "override": override_meta,
+            "override_active": override_active,
+        }
+
         if fl["status"] == "killed":
             return {
                 "enabled": False,
                 "reason": "flag_killed",
-                "flag_key": flag_key,
-                "env_code": env_code,
-                "subject_key": subject,
+                "override_applied": False,
+                **common,
             }
         if fl["status"] == "archived":
             return {
                 "enabled": False,
                 "reason": "flag_archived",
-                "flag_key": flag_key,
-                "env_code": env_code,
-                "subject_key": subject,
+                "override_applied": False,
+                **common,
             }
-        ov = conn.execute(
-            "SELECT * FROM overrides WHERE flag_id=? AND env_id=? AND subject_key=? AND active=1",
-            (fl["id"], env["id"], subject),
-        ).fetchone()
-        if ov:
-            enabled = ov["effect"] == "force_on"
+        if ov_row is not None and ov_row["active"] == 1:
+            enabled = ov_row["effect"] == "force_on"
             return {
                 "enabled": enabled,
-                "reason": f"override:{ov['effect']}",
-                "flag_key": flag_key,
-                "env_code": env_code,
-                "subject_key": subject,
+                "reason": f"override:{ov_row['effect']}",
                 "version": None,
+                "override_applied": True,
+                **common,
             }
         rule = conn.execute(
             "SELECT * FROM flag_rules WHERE flag_id=? AND env_id=? AND official=1",
@@ -69,9 +90,8 @@ def evaluate(body: EvalIn, authorization: str | None = Header(default=None)):
             return {
                 "enabled": False,
                 "reason": "no_official_rule",
-                "flag_key": flag_key,
-                "env_code": env_code,
-                "subject_key": subject,
+                "override_applied": False,
+                **common,
             }
         percent_hit = eval_percent(subject, int(rule["percent"]), flag_key)
         cohort_hit = False
@@ -91,9 +111,8 @@ def evaluate(body: EvalIn, authorization: str | None = Header(default=None)):
             "percent_hit": percent_hit,
             "cohort_hit": cohort_hit,
             "version": rule["version"],
-            "flag_key": flag_key,
-            "env_code": env_code,
-            "subject_key": subject,
+            "override_applied": False,
+            **common,
         }
 
 

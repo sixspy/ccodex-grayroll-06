@@ -13,6 +13,9 @@ from validators import require_effect, require_int, require_str
 
 router = APIRouter(prefix="/api/overrides", tags=["overrides"])
 
+CASCADE_STOP_REASON = "kill_cascade"
+MANUAL_STOP_REASON = "manual"
+
 
 class OverrideIn(BaseModel):
     flag_id: int
@@ -20,6 +23,46 @@ class OverrideIn(BaseModel):
     subject_key: str
     effect: str
     note: str = ""
+
+
+def cascade_for_kill(
+    conn,
+    *,
+    flag_id: int,
+    env_id: int,
+    actor: str,
+    trace_id: str,
+) -> list[dict]:
+    """grayroll-06 甲路径核心：在调用方【同一事务/连接】内，批量停用该开关环境下
+    全部活跃覆盖，并逐条写 override_off 同源历史痕。
+
+    不单独 commit：与正式熔断写口同生共死，由调用方统一提交/回滚。
+    返回被停用的覆盖账（id/subject_key/effect），供响应与页面使用。
+    """
+    now = time.time()
+    rows = conn.execute(
+        "SELECT * FROM overrides WHERE flag_id=? AND env_id=? AND active=1 ORDER BY id",
+        (flag_id, env_id),
+    ).fetchall()
+    stopped: list[dict] = []
+    for row in rows:
+        conn.execute(
+            "UPDATE overrides SET active=0, stop_reason=?, updated_at=? WHERE id=? AND active=1",
+            (CASCADE_STOP_REASON, now, row["id"]),
+        )
+        write_history(
+            conn,
+            actor,
+            "override_off",
+            f"熔断级联停用覆盖 {row['subject_key']}（原效果 {row['effect']}）",
+            flag_id=flag_id,
+            env_id=env_id,
+            trace_id=trace_id,
+        )
+        stopped.append(
+            {"id": row["id"], "subject_key": row["subject_key"], "effect": row["effect"]}
+        )
+    return stopped
 
 
 @router.get("")
@@ -61,7 +104,7 @@ def upsert_override(body: OverrideIn, authorization: str | None = Header(default
         ).fetchone()
         if old:
             conn.execute(
-                "UPDATE overrides SET effect=?, note=?, active=1, updated_at=? WHERE id=?",
+                "UPDATE overrides SET effect=?, note=?, active=1, stop_reason='', updated_at=? WHERE id=?",
                 (effect, body.note or "", now, old["id"]),
             )
             oid = old["id"]
@@ -86,7 +129,10 @@ def disable_override(override_id: int, authorization: str | None = Header(defaul
         row = conn.execute("SELECT * FROM overrides WHERE id=?", (override_id,)).fetchone()
         if not row:
             raise HTTPException(404, detail="覆盖不存在")
-        conn.execute("UPDATE overrides SET active=0, updated_at=? WHERE id=?", (time.time(), override_id))
+        conn.execute(
+            "UPDATE overrides SET active=0, stop_reason=?, updated_at=? WHERE id=?",
+            (MANUAL_STOP_REASON, time.time(), override_id),
+        )
         write_history(
             conn,
             user["username"],

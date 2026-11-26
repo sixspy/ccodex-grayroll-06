@@ -24,7 +24,15 @@ export const EvaluateView = {
       <div class="field"><label>主体键</label><input v-model="form.subject_key" /></div>
       <button class="btn" @click="run">求值</button>
       <div class="err" v-if="err">{{ err }}</div>
-      <pre v-if="result" style="margin-top:0.8rem">{{ result }}</pre>
+      <div v-if="result" class="eval-verdict">
+        <span :class="result.enabled ? 'badge on' : 'badge off'">{{ result.enabled ? '放行 ON' : '关闭 OFF' }}</span>
+        <span class="pill">{{ result.reason }}</span>
+        <span v-if="result.override" :class="result.override_active ? 'badge on' : 'badge cascade'">
+          覆盖 {{ result.override.effect }} · {{ result.override_active ? '生效中' : (result.override.stop_reason === 'kill_cascade' ? '已熔断级联停用' : '未生效') }}
+        </span>
+        <span v-else class="badge off">无主体覆盖</span>
+      </div>
+      <pre v-if="result" style="margin-top:0.4rem">{{ result }}</pre>
     </div>
     <div class="panel span-7">
       <h2>正式规则板</h2>

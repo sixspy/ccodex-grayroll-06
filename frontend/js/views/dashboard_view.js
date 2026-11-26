@@ -22,6 +22,8 @@ export const DashboardView = {
     </div>
     <div class="panel span-4" v-if="data"><div class="muted">开关数</div><p class="stat">{{ data.flags }}</p></div>
     <div class="panel span-4" v-if="data"><div class="muted">已生效</div><p class="stat">{{ data.active }}</p></div>
+    <div class="panel span-4" v-if="data"><div class="muted">已熔断</div><p class="stat danger">{{ data.killed }}</p></div>
+    <div class="panel span-4" v-if="data"><div class="muted">活跃覆盖</div><p class="stat warn">{{ data.active_overrides }}</p></div>
     <div class="panel span-4" v-if="data"><div class="muted">开放影子</div><p class="stat">{{ data.open_shadows }}</p></div>
     <div class="panel span-6" v-if="data">
       <h2>状态分布</h2>
